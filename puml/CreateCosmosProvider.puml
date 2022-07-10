@@ -1,0 +1,36 @@
+@startuml
+'https://plantuml.com/sequence-diagram
+
+actor User as user
+
+participant "relayer/cmd/chains.go" as cmd_chains
+participant "relayer/cmd/appstate.go" as cmd_appstate
+participant "cmd/config.go" as cmd_config
+participant "relayer/relayer/chain.go" as relayer_chain
+participant "relayer/provider/cosmos/provider.go" as cosmos_provider
+participant "github.com/strangelove-ventures/lens/client" as lens
+
+
+'-------
+user -> cmd_chains: rly chains add-dir configs/demo/chains
+cmd_chains -> cmd_config: addChainsFromDirectory("configs/demo/chains",..)
+activate cmd_config
+cmd_config -> cosmos_provider: NewProvider
+activate cosmos_provider
+cosmos_provider -> lens: NewChainClient(ChainClientConfig, homepath, etc)
+lens -> cosmos_provider: ChainClient{KeyringOptions..}
+note right
+TODO: lensでclientを作成していて、KeyringOptionsを見ているので、Tendermintのkeytypeがそのまま使用できない
+
+end note
+cosmos_provider -> cmd_config: CosmosProvider{ChainClient..}
+deactivate cosmos_provider
+cmd_config -> relayer_chain:NewChain(CosmosProvider,..)
+cmd_config -> cmd_chains: err?
+deactivate cmd_config
+cmd_chains -> cmd_appstate: OverwriteConfig(appState.Config,..)
+
+
+
+
+@enduml
