@@ -1,0 +1,37 @@
+@startuml
+'https://plantuml.com/sequence-diagram
+
+'autonumber
+actor       User       as user
+
+
+
+participant "relayer/cmd/tx.go" as cmd_tx
+participant "cmd/appstate.go" as cmd_appstate
+participant "relayer/client.go" as relayer_client.go
+participant "relayer/provider/cosmos/tx.go" as provider_tx
+participant "ibc-go/modules/light-clients/07-tendermint/types/client_state.go" as tendermint_client
+
+
+user -> cmd_tx:rly tx link demo
+cmd_tx -> relayer_client.go: src.CreateClients
+relayer_client.go -> relayer_client.go: CreateClients
+relayer_client.go -> provider_tx: NewClientState
+provider_tx -> tendermint_client:
+tendermint_client -> provider_tx: ClientState{ChainId,.... FrozenHeight, LatestHeight, ProofSpecs etc}
+note right
+Ref:
+ibc-go/proto/ibc/lightclients/tendermint/v1/tendermint.proto
+end note
+relayer_client.go -> provider_tx: SendMessages
+relayer_client.go -> cmd_tx: modified{}
+cmd_tx -> cmd_appstate: OverwriteConfig
+note right
+Overwrite the local config file for each chain using the client state information.
+end note
+
+cmd_tx -> provider_tx:src.CreateOpenConnections
+cmd_tx -> provider_tx:src.CreateOpenChannels
+
+
+@enduml

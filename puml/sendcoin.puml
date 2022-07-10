@@ -1,0 +1,80 @@
+@startuml
+'https://plantuml.com/sequence-diagram
+
+'autonumber
+'Alice -> Bob: Authentication Request
+'Bob --> Alice: Authentication Response
+'
+'Alice -> Bob: Another authentication Request
+'Alice <-- Bob: another authentication Response
+actor       User       as user
+'actor       actorStyle Hollow
+
+participant "relayer/cmd/tx.go" as tx.go
+participant "relayer/relayer/provider/cosmos/query.go" as provider_query
+participant "relayer/relayer/packet-tx.go" as packet
+participant "relayer/relayMsgs.go" as relay
+participant "relayer/provider/cosmos/tx.go" as provider_tx
+participant "strangelove-ventures/lens@v0.5.1/client/broadcast.go" as broadcast.go
+participant "tendermint/light/rpc/client.go" as rpc_lightclient
+
+activate user
+
+
+user -> tx.go: xfersend
+activate tx.go
+tx.go -> provider_query: QueryDenomTraces
+provider_query -> tx.go: []transfertypes.DenomTrace
+tx.go -> "ibc-go/modules/apps/transfer/types/trace.go": GetFullDenomPath
+tx.go -> packet: SendTransferMsg
+
+activate packet
+packet -> provider_query: QueryClientStateResponse
+packet -> "modules/core/02-client/types/codec.go": UnpackClientState
+packet -> provider_query: QueryClientConsensusState
+packet -> "modules/core/02-client/types/codec.go": UnpackConsensusState
+packet -> provider_tx: MsgTransfer
+provider_tx -> packet: RelayerMessage{}
+note right
+ ibc-go/proto/ibc/applications/transfer/v1/tx.proto
+ This message type
+ Create an instance derived from and convert it using the NewCosmosMessage () function.
+end note
+packet -> relay: Send
+note right
+  func (cc *CosmosProvider) SendMessagesを設定して呼び出し．呼び出し先で使用
+end note
+activate relay
+relay -> provider_tx: SendMessages
+note right
+  message数分SendMessagesを呼び出してループ．これの配列？
+    // RelayMsgs contains the msgs that need to be sent to both a src and dst chain
+    // after a given relay round. MaxTxSize and MaxMsgLength are ignored if they are
+    // set to zero.
+    type RelayMsgs struct {
+    	Src          []provider.RelayerMessage `json:"src"`
+    	Dst          []provider.RelayerMessage `json:"dst"`
+    	MaxTxSize    uint64                    `json:"max_tx_size"`    // maximum permitted size of the msgs in a bundled relay transaction
+    	MaxMsgLength uint64                    `json:"max_msg_length"` // maximum amount of messages in a bundled relay transaction
+    }
+end note
+provider_tx -> broadcast.go:BroadcastTx
+activate broadcast.go
+broadcast.go -> broadcast.go:broadcastTx
+broadcast.go -> rpc_lightclient: BroadcastTxSync
+rpc_lightclient -> broadcast.go: response{}
+broadcast.go -> provider_tx: response{}
+provider_tx -> relay: response{}
+relay -> packet:response{}
+deactivate packet
+packet -> tx.go
+tx.go -> user
+deactivate tx.go
+deactivate user
+
+@enduml
+
+
+
+
+
